@@ -1,35 +1,42 @@
 """Main script for training and comparing RL algorithms on FlappyBird."""
-from trainers import PPOTrainer, DQNTrainer
+from trainers import create_trainer
 from utils import compare_training_results, print_comparison_summary
 import config
 
 
-def train_single_algorithm(algorithm="PPO"):
+def train_single_algorithm(algorithm="PPO", num_iterations=None):
     """Train a single algorithm."""
+    if num_iterations is None:
+        num_iterations = config.DEFAULT_NUM_ITERATIONS
+
     print(f"\n{'='*70}")
     print(f" TRAINING {algorithm.upper()} ON FLAPPYBIRD")
     print(f"{'='*70}")
 
-    # Select trainer
-    if algorithm.upper() == "PPO":
-        trainer = PPOTrainer(num_workers=config.DEFAULT_NUM_WORKERS)
-    elif algorithm.upper() == "DQN":
-        trainer = DQNTrainer(num_workers=1)
-    else:
-        raise ValueError(f"Unknown algorithm: {algorithm}")
+    trainer = create_trainer(algorithm)
 
-    # Train with same number of iterations
-    trainer.train(num_iterations=config.DEFAULT_NUM_ITERATIONS)
+    trainer.train(num_iterations=num_iterations)
 
-    # Save model
+    stats = trainer.get_stats()
+    if stats:
+        print(f"\nTraining Statistics:")
+        print(f"  Best Reward: {stats['best_reward']:.2f}")
+        print(f"  Best Max Reward: {stats['best_max_reward']:.2f}")
+        print(f"  Final Reward: {stats['final_reward']:.2f}")
+        print(f"  Total Timesteps: {stats['total_timesteps']:,}")
+
+    trainer.export_metrics()
+    trainer.plot_training_curve(show=False)
+
     checkpoint = trainer.save()
 
-    # Test with same number of episodes
-    trainer.test(num_episodes=2, render=True)
+    trainer.test(
+        num_episodes=2,
+        render=True,
+        log_action_distribution=config.DEFAULT_LOG_ACTION_DISTRIBUTION,
+    )
 
-    # Cleanup
     trainer.cleanup()
-
     return checkpoint
 
 
@@ -39,51 +46,38 @@ def compare_algorithms():
     print(" COMPARING ALGORITHMS ON FLAPPYBIRD")
     print(f"{'='*70}")
 
-    algorithms = ["PPO", "DQN"]
+    algorithms = ["PPO", "DQN", "CQL", "Rainbow", "APPO", "IMPALA"]
     trainers = {}
     training_histories = {}
     test_results = {}
 
-    # Train each algorithm
     for algo_name in algorithms:
         print(f"\n\n{'='*70}")
         print(f" TRAINING {algo_name}")
         print(f"{'='*70}")
 
-        if algo_name == "PPO":
-            trainer = PPOTrainer(num_workers=config.DEFAULT_NUM_WORKERS)
-        elif algo_name == "DQN":
-            trainer = DQNTrainer(num_workers=1)
-
-        # Train with same iterations for fair comparison
+        trainer = create_trainer(algo_name)
         history = trainer.train(num_iterations=config.DEFAULT_NUM_ITERATIONS)
         training_histories[algo_name] = history
 
-        # Save
         checkpoint = trainer.save()
         print(f"{algo_name} checkpoint: {checkpoint}")
 
-        # Test without rendering (faster) with same number of episodes
-        rewards = trainer.test(num_episodes=config.DEFAULT_TEST_EPISODES, render=False)
+        rewards = trainer.test(
+            num_episodes=config.DEFAULT_TEST_EPISODES,
+            render=False,
+            log_action_distribution=config.DEFAULT_LOG_ACTION_DISTRIBUTION,
+        )
         test_results[algo_name] = rewards
-
         trainers[algo_name] = trainer
 
-    # Compare results
     compare_training_results(training_histories, save_path="algorithm_comparison.png")
     print_comparison_summary(test_results)
 
-    # Cleanup all trainers
     for trainer in trainers.values():
         trainer.cleanup()
 
 
 if __name__ == '__main__':
-    # Choose mode:
-
-    # Mode 1: Train a single algorithm
     train_single_algorithm(algorithm="PPO")
-    # train_single_algorithm(algorithm="DQN")
-
-    # Mode 2: Compare multiple algorithms (both trained for 200 iterations)
     # compare_algorithms()

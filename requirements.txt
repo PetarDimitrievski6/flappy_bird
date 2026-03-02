@@ -1,0 +1,7 @@
+ray[rllib]>=2.53.0
+torch>=2.5.1
+gymnasium>=1.2.0
+flappy-bird-gymnasium>=0.4.0
+numpy>=2.0.0
+matplotlib>=3.10.0
+
